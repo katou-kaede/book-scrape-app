@@ -1,0 +1,18 @@
+# Go
+backend/tmp/
+backend/*.exe
+backend/.env
+
+# Node/React
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Database
+backend/*.db
+backend/*.db-journal
+
+# --- OS / Tools ---
+.DS_Store
+Thumbs.db
+.vscode/
