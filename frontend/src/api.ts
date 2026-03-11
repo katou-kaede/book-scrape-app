@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // GoのサーバーのURLを設定
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +10,8 @@ const api = axios.create({
 export interface ScrapeStatus {
     isScanning: boolean;
     lastError: string;
+    currentCount: number;
+    totalCount: number;
 }
 
 // 本の一覧を取得する関数

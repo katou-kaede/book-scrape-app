@@ -17,6 +17,8 @@ type Scraper struct {
 	repo *repository.BookRepository
 	isScanning bool
 	lastError string
+	currentCount int
+	totalCount int
 }
 
 func NewScraper(repo *repository.BookRepository) *Scraper {
@@ -32,6 +34,8 @@ func (s *Scraper) Start() error {
 
 	s.isScanning = true  // 実行開始時にフラグを立てる
 	s.lastError = ""  // 前回のエラーをリセット
+	s.currentCount = 0
+	s.totalCount = 0
 
 	var finalErr error
 	// 関数が終わる時に必ずフラグを折る（deferを使うのが確実）
@@ -79,8 +83,12 @@ func (s *Scraper) Start() error {
 
 	productPods := page.Locator(".product_pod")
 	count, _ := productPods.Count()
+	s.totalCount = count
 
 	for i := 0; i < count; i++ {
+		// ループの冒頭で「今何冊目か」を更新
+        s.currentCount = i + 1
+
 		book := &model.Book{}
 		pod := productPods.Nth(i)
 
@@ -130,10 +138,6 @@ func (s *Scraper) Start() error {
 }
 
 
-func (s *Scraper) IsScanning() bool {
-	return s.isScanning
-}
-
-func (s *Scraper) GetLastError() string {
-    return s.lastError
+func (s *Scraper) GetStatus() (bool, string, int, int) {
+    return s.isScanning, s.lastError, s.currentCount, s.totalCount
 }

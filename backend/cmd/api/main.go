@@ -51,7 +51,8 @@ func main() {
 
 	// スクレイピングを開始するURL（ボタン用）
 	e.POST("/scrape", func(c echo.Context) error {
-		if s.IsScanning() {
+		isScanning, _, _, _ := s.GetStatus()
+		if isScanning {
 			return c.JSON(http.StatusConflict, map[string]string{"message": "現在スクレイピング実行中です。しばらくお待ちください。"})
 		}
 		// 現場の工夫：重い処理なので「別スレッド（go）」で走らせ、
@@ -62,9 +63,12 @@ func main() {
 
 	// スクレイピングの状態を返す
 	e.GET("/scrape/status", func(c echo.Context) error {
+		isScanning, lastError, current, total := s.GetStatus()
 		return c.JSON(http.StatusOK, map[string]interface{}{
-			"isScanning": s.IsScanning(),
-			"lastError":  s.GetLastError(),
+			"isScanning":   isScanning,
+			"lastError":    lastError,
+			"currentCount": current,
+			"totalCount":   total,
 		})
 	})
 

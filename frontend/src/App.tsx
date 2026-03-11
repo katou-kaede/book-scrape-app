@@ -13,6 +13,7 @@ function App() {
   const [books, setBooks] = useState<Book[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   // 1. データを読み込む関数
   const loadData = async () => {
@@ -50,13 +51,22 @@ function App() {
       intervalId = window.setInterval(async () => {
         try {
           const status = await getScrapeStatus();
+
+          // 進捗を更新
+          setProgress({ 
+            current: status.currentCount, 
+            total: status.totalCount 
+          });
           
           if (!status.isScanning) {
             // サーバー側で終わった場合
             setIsScanning(false);
             clearInterval(intervalId);
             loadData(); // 終わったので最新化
-            
+
+            // 終了したら少し余韻を残して進捗をリセット（任意）
+            setTimeout(() => setProgress({ current: 0, total: 0 }), 3000);
+
             if (status.lastError) {
               setError(status.lastError);
             }
@@ -79,42 +89,80 @@ function App() {
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800">
       <div className="max-w-5xl mx-auto">
         {/* ヘッダーセクション */}
-        <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
-              <span className="text-3xl">📚</span> Book Scraper
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">実演用スクレイピング・ダッシュボード</p>
-          </div>
+        <header className="mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          {/* 上段：タイトルとボタンの並び */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
+                <span className="text-3xl">📚</span> Book Scraper
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">実演用スクレイピング・ダッシュボード</p>
+            </div>
           
-          <div className="flex gap-3">
-            <button 
-              onClick={loadData} 
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all cursor-pointer"
-              title="表示を更新"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            {/* ボタンエリア */}
+            <div className="flex gap-3 items-center">
+              <button 
+                onClick={loadData} 
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-all cursor-pointer"
+                title="表示を更新"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
             
-            <button 
-              onClick={handleScrape} 
-              disabled={isScanning}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
-                isScanning 
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed" 
-                  : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200 cursor-pointer"
-              }`}
-            >
-              {isScanning ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                  実行中...
-                </>
-              ) : "スクレイピング開始"}
-            </button>
+              <button 
+                onClick={handleScrape} 
+                disabled={isScanning}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
+                  isScanning 
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed" 
+                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200 cursor-pointer"
+                }`}
+              >
+                {isScanning ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                    実行中...
+                  </>
+                ) : "スクレイピング開始"}
+              </button>
+            </div>
           </div>
+
+          {/* 下段：進捗セクション */}
+          {isScanning && progress.total > 0 && (
+            <div className="mt-6 pt-6 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-500">
+              <div className="flex justify-between items-end mb-3">
+                <div>
+                  <span className="text-sm font-bold text-indigo-600 uppercase tracking-wider">Processing...</span>
+                  <h3 className="text-slate-800 font-semibold">データを抽出しています</h3>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-mono font-bold text-indigo-600">
+                    {Math.round((progress.current / progress.total) * 100)}
+                  </span>
+                  <span className="text-indigo-400 font-bold text-sm">%</span>
+                </div>
+              </div>
+
+              {/* バー本体 */}
+              <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden border border-slate-50">
+                <div 
+                  className="bg-linear-to-r from-indigo-500 to-blue-500 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_12px_rgba(79,70,229,0.4)] relative"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                >
+                  {/* 光が走るようなアニメーション（お好みで） */}
+                  <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-size-[30px_30px] animate-[shimmer_2s_linear_infinite]"></div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex justify-between text-xs font-medium text-slate-400">
+                <span>取得済み: {progress.current} 冊</span>
+                <span>総数: {progress.total} 冊</span>
+              </div>
+            </div>
+          )}
         </header>
 
         {/* エラーアラート */}
