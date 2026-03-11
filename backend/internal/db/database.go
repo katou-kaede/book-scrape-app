@@ -41,7 +41,7 @@ func NewDatabase() (*sqlx.DB, error) {
 	schema := `
 	CREATE TABLE IF NOT EXISTS books (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		title TEXT NOT NULL,
+		title TEXT NOT NULL UNIQUE,
 		price TEXT,
 		stock TEXT
 	);`

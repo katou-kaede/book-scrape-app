@@ -16,7 +16,13 @@ func NewBookRepository(db *sqlx.DB) *BookRepository {
 }
 
 func (r *BookRepository) Save(book *model.Book) error {
-	query := `INSERT INTO books (title, price, stock) VALUES (:title, :price, :stock)`
+	query := `
+		INSERT INTO books (title, price, stock) 
+		VALUES (:title, :price, :stock)
+		ON CONFLICT(title) DO UPDATE SET
+		price=excluded.price,
+		stock=excluded.stock
+	`
 	_, err := r.db.NamedExec(query, book)
 	return err
 }

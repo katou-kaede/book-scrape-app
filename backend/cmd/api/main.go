@@ -51,13 +51,21 @@ func main() {
 
 	// スクレイピングを開始するURL（ボタン用）
 	e.POST("/scrape", func(c echo.Context) error {
-		if s.IsProcessing() {
+		if s.IsScanning() {
 			return c.JSON(http.StatusConflict, map[string]string{"message": "現在スクレイピング実行中です。しばらくお待ちください。"})
 		}
 		// 現場の工夫：重い処理なので「別スレッド（go）」で走らせ、
 		// フロントには「受け付けたよ！」と即座に返信します
 		go s.Start() 
 		return c.JSON(http.StatusAccepted, map[string]string{"message": "スクレイピングを開始しました"})
+	})
+
+	// スクレイピングの状態を返す
+	e.GET("/scrape/status", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"isScanning": s.IsScanning(),
+			"lastError":  s.GetLastError(),
+		})
 	})
 
 	// サーバーの起動アドレスも環境変数にする

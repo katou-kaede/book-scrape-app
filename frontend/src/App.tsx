@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchBooks, startScraping } from './api';
+import { fetchBooks, startScraping, getScrapeStatus } from './api';
 
 // データの型定義
 interface Book {
@@ -11,7 +11,8 @@ interface Book {
 
 function App() {
   const [books, setBooks] = useState<Book[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // 1. データを読み込む関数
   const loadData = async () => {
@@ -25,20 +26,49 @@ function App() {
 
   // 2. スクレイピング開始ボタンの処理
   const handleScrape = async () => {
-    setLoading(true);
     try {
+      setError(null);
       await startScraping();
-      alert("スクレイピングを開始しました！裏で動いています。");
+      setIsScanning(true);
       // 少し待ってからリストを更新する（Go側で少しデータが入るのを待つ）
-      setTimeout(loadData, 2000);
+      // setTimeout(loadData, 2000);
     } catch (error: any) {
       if (error.response?.status === 409) {
         alert("現在実行中です。");
+        setIsScanning(true);
+      } else {
+        setError("サーバーとの通信に失敗しました。");
       }
-    } finally {
-      setLoading(false);
     }
   };
+
+  // ポーリング処理
+  useEffect(() => {
+    let intervalId: number;
+
+    if (isScanning) {
+      intervalId = window.setInterval(async () => {
+        try {
+          const status = await getScrapeStatus();
+          
+          if (!status.isScanning) {
+            // サーバー側で終わった場合
+            setIsScanning(false);
+            clearInterval(intervalId);
+            loadData(); // 終わったので最新化
+            
+            if (status.lastError) {
+              setError(status.lastError);
+            }
+          }
+        } catch (err) {
+          console.error("ステータス確認失敗", err);
+        }
+      }, 2000);
+    }
+
+    return () => clearInterval(intervalId);
+  }, [isScanning]); // isScanningが変わるたびに監視を開始/停止
 
   // 画面が開いたときに一度データを読み込む
   useEffect(() => {
@@ -48,9 +78,16 @@ function App() {
   return (
     <div style={{ padding: '20px' }}>
       <h1>📚 Book Scraper</h1>
+
+      {/* エラーメッセージの表示 */}
+      {error && (
+        <div style={{ color: 'red', backgroundColor: '#ffdada', padding: '10px', marginBottom: '10px', borderRadius: '5px' }}>
+          <strong>エラー:</strong> {error}
+        </div>
+      )}
       
-      <button onClick={handleScrape} disabled={loading}>
-        {loading ? "実行中..." : "最新データを取得（スクレイピング開始）"}
+      <button onClick={handleScrape} disabled={isScanning}>
+        {isScanning ? "実行中..." : "最新データを取得（スクレイピング開始）"}
       </button>
 
       <button onClick={loadData} style={{ marginLeft: '10px' }}>
@@ -69,7 +106,7 @@ function App() {
           </tr>
         </thead>
         <tbody>
-          {books.map((book) => (
+          {books && books.map((book) => (
             <tr key={book.id}>
               <td>{book.id}</td>
               <td>{book.title}</td>

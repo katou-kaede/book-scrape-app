@@ -3,7 +3,7 @@ package scraper
 import (
 	"log"
 	"regexp"
-	// "fmt"
+	"fmt"
 	//"context"
 	//"time"
 
@@ -16,6 +16,7 @@ import (
 type Scraper struct {
 	repo *repository.BookRepository
 	isScanning bool
+	lastError string
 }
 
 func NewScraper(repo *repository.BookRepository) *Scraper {
@@ -29,17 +30,23 @@ func (s *Scraper) Start() error {
 		return nil
 	}
 
-	// 実行開始時にフラグを立てる
-	s.isScanning = true
+	s.isScanning = true  // 実行開始時にフラグを立てる
+	s.lastError = ""  // 前回のエラーをリセット
+
+	var finalErr error
 	// 関数が終わる時に必ずフラグを折る（deferを使うのが確実）
 	defer func() {
+		if finalErr != nil {
+			s.lastError = finalErr.Error()
+		}
 		s.isScanning = false
 	}()
 
 	// 1. Playwrightの起動
 	pw, err := playwright.Run()
 	if err != nil {
-		return err
+		finalErr = fmt.Errorf("Playwrightの起動に失敗: %w", err)
+		return finalErr
 	}
 	// 現場の鉄則: defer で確実に停止させる（リソースリーク防止）
 	defer pw.Stop()
@@ -49,18 +56,21 @@ func (s *Scraper) Start() error {
 		Headless: playwright.Bool(false),
 	})
 	if err != nil {
-		return err
+		finalErr = fmt.Errorf("ブラウザの起動に失敗: %w", err)
+		return finalErr
 	}
 	defer browser.Close()
 
 	page, err := browser.NewPage()
 	if err != nil {
-		return err
+		finalErr = fmt.Errorf("新しいページの作成に失敗: %w", err)
+		return finalErr
 	}
 
 	log.Println("books.toscrape.comへ移動...")
 	if _, err := page.Goto("https://books.toscrape.com/"); err != nil {
-		return err
+		finalErr = fmt.Errorf("ページへの移動に失敗: %w", err)
+		return finalErr
 	}
 
 	// 3. データの抽出
@@ -110,15 +120,20 @@ func (s *Scraper) Start() error {
 		// 5. 前のページに戻る（ブラウザの「戻る」ボタンと同じ動作）
 		if _, err := page.GoBack(); err != nil {
 			log.Printf("ブラウザバックに失敗: %v", err)
+			finalErr = fmt.Errorf("ブラウザバックに失敗: %w", err)
 			break
 		}
 	}
 
 	log.Printf("%d冊の本を取得しました", count)
-	return nil
+	return finalErr
 }
 
 
-func (s *Scraper) IsProcessing() bool {
+func (s *Scraper) IsScanning() bool {
 	return s.isScanning
+}
+
+func (s *Scraper) GetLastError() string {
+    return s.lastError
 }
