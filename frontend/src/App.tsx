@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchBooks, startScraping, getScrapeStatus } from './api';
+import { fetchBooks, startScraping, getScrapeStatus, downloadCSV } from './api';
 
 // データの型定義
 interface Book {
@@ -40,6 +40,24 @@ function App() {
       } else {
         setError("サーバーとの通信に失敗しました。");
       }
+    }
+  };
+
+  // 3. CSVのダウンロード処理
+  const handleDownload = async () => {
+    try {
+      const blob = await downloadCSV();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'books.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }catch (error) {
+      console.error("ダウンロード中にエラーが発生しました:", error);
+      alert("CSVのダウンロードに失敗しました。");
     }
   };
 
@@ -126,6 +144,22 @@ function App() {
                     実行中...
                   </>
                 ) : "スクレイピング開始"}
+              </button>
+
+              <button
+                onClick={handleDownload}
+                disabled={isScanning || books.length === 0} // 実行中またはデータ無しで無効化
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all shodow-lg cursor-pointer ${
+                  isScanning || books.length === 0
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100'
+                }`}
+              >
+                {/* ダウンロードアイコン（SVG） */}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                CSV保存
               </button>
             </div>
           </div>

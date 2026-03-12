@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"io"
 
 	"book-scrape-app/backend/internal/db"
 	"book-scrape-app/backend/internal/handler"
@@ -15,8 +16,39 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/joho/godotenv"
 )
+// ログの設定
+func setupLogFile() (*os.File, error) {
+	logFileName := "scraping.log"
+	oldLogFileName := "scraping.old.log"
+
+	// 1. ローテーション：古いログがあればバックアップに回す
+	if _, err := os.Stat(logFileName); err == nil {
+		_ = os.Remove(oldLogFileName) // 古いバックアップを削除
+		_ = os.Rename(logFileName, oldLogFileName) // 現在のログをバックアップへ
+	}
+
+	// 2. 新規ログファイルの作成
+	f, err := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 出力先を「コンソール」と「ファイル」の両方に設定
+	multi := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(multi)
+
+	return f, nil
+}
+
 
 func main() {
+	// ログの設定
+	f, err := setupLogFile()
+    if err != nil {
+        log.Fatalf("ログ設定に失敗: %v", err)
+    }
+    defer f.Close()
+
 	// 最初に .env を読み込む
     if err := godotenv.Load(); err != nil {
         log.Println(".envファイルが見つかりません。デフォルト値を使用します。")
@@ -71,6 +103,9 @@ func main() {
 			"totalCount":   total,
 		})
 	})
+
+	// CSVダウンロード用のエンドポイント
+	e.GET("/books/download", h.DownloadCSV)
 
 	// サーバーの起動アドレスも環境変数にする
     addr := os.Getenv("SERVER_ADDR")

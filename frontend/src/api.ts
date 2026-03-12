@@ -27,6 +27,13 @@ export const startScraping = async () => {
 };
 
 export const getScrapeStatus = async (): Promise<ScrapeStatus> => {
-  const res = await axios.get<ScrapeStatus>(`${API_BASE_URL}/scrape/status`);
-  return res.data;
+  const response = await api.get<ScrapeStatus>(`/scrape/status`);
+  return response.data;
+}
+
+export const downloadCSV = async (): Promise<Blob> => {
+  const response = await api.get('/books/download', {
+    responseType: 'blob', // バイナリデータとして受け取る
+  });
+  return response.data;
 }
