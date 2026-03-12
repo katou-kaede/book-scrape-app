@@ -157,10 +157,10 @@ function App() {
                 </div>
               </div>
 
-              <div className="mt-3 flex justify-between text-xs font-medium text-slate-400">
+              {/* <div className="mt-3 flex justify-between text-xs font-medium text-slate-400">
                 <span>取得済み: {progress.current} 冊</span>
                 <span>総数: {progress.total} 冊</span>
-              </div>
+              </div> */}
             </div>
           )}
         </header>
