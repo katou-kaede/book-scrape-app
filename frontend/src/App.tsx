@@ -103,6 +103,18 @@ function App() {
     loadData();
   }, []);
 
+  // errorがセットされたら、5秒後に自動で消す
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000); // 5000ms = 5秒
+
+      // クリーンアップ関数（タイマーの重複防止）
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 text-slate-800">
       <div className="max-w-5xl mx-auto">
@@ -148,9 +160,9 @@ function App() {
 
               <button
                 onClick={handleDownload}
-                disabled={isScanning || books.length === 0} // 実行中またはデータ無しで無効化
+                disabled={isScanning || (books ?? []).length === 0} // 実行中またはデータ無しで無効化
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all shodow-lg cursor-pointer ${
-                  isScanning || books.length === 0
+                  isScanning || (books ?? []).length === 0
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100'
                 }`}
@@ -221,8 +233,8 @@ function App() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {books.length > 0 ? (
-                books.map((book) => (
+              {(books ?? []).length > 0 ? (
+                books?.map((book) => (
                   <tr key={book.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4 text-sm text-slate-400 font-mono">#{book.id}</td>
                     <td className="px-6 py-4">

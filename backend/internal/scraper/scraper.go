@@ -58,7 +58,13 @@ func (s *Scraper) Start() error {
 
 	// 2. ブラウザの起動 
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(false),
+		Headless: playwright.Bool(true),
+		Args: []string{
+			"--no-sandbox",
+			"--disable-setuid-sandbox",
+			"--disable-dev-shm-usage", // これが超重要！メモリ不足を回避します
+			"--disable-gpu",           // LinuxコンテナではGPU不要
+		},
 	})
 	if err != nil {
 		finalErr = fmt.Errorf("ブラウザの起動に失敗: %w", err)
@@ -66,7 +72,21 @@ func (s *Scraper) Start() error {
 	}
 	defer browser.Close()
 
-	page, err := browser.NewPage()
+	// ブラウザを起動した後
+	context, err := browser.NewContext(playwright.BrowserNewContextOptions{
+		// 証明書エラーを無視する設定
+		IgnoreHttpsErrors: playwright.Bool(true),
+		// 画面サイズをフルHDくらいに広げておく
+		Viewport: &playwright.Size{
+			Width:  1920,
+			Height: 1080,
+		},
+	})
+	if err != nil {
+		log.Fatalf("could not create context: %v", err)
+	}
+
+	page, err := context.NewPage()
 	if err != nil {
 		finalErr = fmt.Errorf("新しいページの作成に失敗: %w", err)
 		return finalErr
@@ -82,7 +102,18 @@ func (s *Scraper) Start() error {
 	// 在庫数（数字だけ）を抜き出すための正規表現パターン
 	re := regexp.MustCompile(`\d+`)
 
+	// ページ全体の読み込みを待つ
+	page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+		State: playwright.LoadStateDomcontentloaded,
+	})
+
+	err = page.Locator(".product_pod").First().WaitFor()
+	if err != nil {
+		log.Printf("要素の待機中にエラーが発生しました: %v", err)
+	}
+
 	maxPages := s.GetMaxPages(page)
+	// maxPages := 3
 	productPods := page.Locator(".product_pod")
 	count, _ := productPods.Count()
 	s.totalCount = count * maxPages // 全体の冊数を概算
@@ -92,6 +123,16 @@ func (s *Scraper) Start() error {
 		if _, err := page.Goto(targetURL); err != nil {
             continue
         }
+
+		// ページ全体の読み込みを待つ
+		page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+			State: playwright.LoadStateDomcontentloaded,
+		})
+
+		err = page.Locator(".product_pod").First().WaitFor()
+		if err != nil {
+			log.Printf("要素の待機中にエラーが発生しました: %v", err)
+		}
 
 		productPods := page.Locator(".product_pod")
 		count, _ := productPods.Count()
@@ -103,27 +144,58 @@ func (s *Scraper) Start() error {
 			book := &model.Book{}
 			pod := productPods.Nth(i)
 
+			// ページ全体の読み込みを待つ
+			page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+				State: playwright.LoadStateDomcontentloaded,
+			})
+
+			err = page.Locator(".product_pod").First().WaitFor()
+			if err != nil {
+				log.Printf("要素の待機中にエラーが発生しました: %v", err)
+			}
+
 			// タイトルの取得
 			titleLocator := pod.Locator("h3 a")
 			book.Title, _ = titleLocator.GetAttribute("title")
 
 			// 価格の取得
 			priceLocator := pod.Locator(".price_color")
-			book.Price, _ = priceLocator.InnerText()
+			book.Price, _ = priceLocator.TextContent()
 
 			// 詳細ページへ移動
-			if err := titleLocator.Click(); err != nil {
-				log.Printf("クリックに失敗: %v", err)
+			//  まず、要素が見える位置までスクロールさせる
+			// if err := titleLocator.ScrollIntoViewIfNeeded(); err != nil {
+			// 	log.Printf("スクロール失敗: %v", err)
+			// }
+			// if err := titleLocator.Click(playwright.LocatorClickOptions{
+			// 	Force:   playwright.Bool(true),
+    		// 	Timeout: playwright.Float(15000),
+			// }); err != nil {
+			// 	log.Printf("クリックに失敗: %v", err)
+			// }
+
+			if err := titleLocator.DispatchEvent("click", nil); err != nil {
+				log.Printf("[%d冊目] イベント発火に失敗: %v", s.currentCount, err)
 				continue
+			}
+
+			// 移動を確実に待つ（これがないと次でコケる）
+			err := page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{
+				State: playwright.LoadStateNetworkidle,
+			})
+			if err != nil {
+				log.Printf("読み込み待ちでエラー: %v", err)
 			}
 
 			// 在庫数の取得
 			stockLocator := page.Locator(".product_main .instock.availability")
-			if err := stockLocator.WaitFor(); err != nil {
+			if err := stockLocator.WaitFor(playwright.LocatorWaitForOptions{
+				State: playwright.WaitForSelectorStateVisible,
+			}); err != nil {
 				log.Printf("詳細ページの在庫要素が見つかりません: %v", err)
 			}
 
-			stockText, _ := stockLocator.InnerText()
+			stockText, _ := stockLocator.TextContent()
 
 			// 正規表現で「19」などの数字だけを抽出
 			match := re.FindString(stockText)
@@ -152,7 +224,7 @@ func (s *Scraper) Start() error {
 
 func (s *Scraper) GetMaxPages(page playwright.Page) int {
     // セレクターで要素を取得
-    text, err := page.Locator(".pager .current").InnerText()
+    text, err := page.Locator(".pager .current").TextContent()
     if err != nil {
         return 1 // 失敗したら安全のために1ページだけにする
     }

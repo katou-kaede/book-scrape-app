@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    container_name: book-scraping-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data   # DBファイルをホスト側に保存（永続化）
+      - ./logs:/app/logs   # ログをホスト側で確認可能に
+    env_file:
+      - ./backend/.env               # ローカルの .env をベースにする
+    environment:
+      # コンテナ内での動作に必要な設定で上書き
+      - SERVER_ADDR=0.0.0.0:8080
+      - FRONTEND_URL=http://localhost:8080
+      - DB_PATH=/app/data/books.db
+    restart: unless-stopped

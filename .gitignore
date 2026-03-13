@@ -16,3 +16,4 @@ backend/*.db-journal
 .DS_Store
 Thumbs.db
 .vscode/
+logs/

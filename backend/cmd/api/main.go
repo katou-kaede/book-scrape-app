@@ -4,55 +4,47 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"io"
+	"flag"
 
 	"book-scrape-app/backend/internal/db"
 	"book-scrape-app/backend/internal/handler"
 	"book-scrape-app/backend/internal/repository"
 	"book-scrape-app/backend/internal/scraper"
-	// "book-scrape-app/backend/internal/model"
+	"book-scrape-app/backend/internal/logger"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/joho/godotenv"
+	"github.com/playwright-community/playwright-go"
 )
-// ログの設定
-func setupLogFile() (*os.File, error) {
-	logFileName := "scraping.log"
-	oldLogFileName := "scraping.old.log"
-
-	// 1. ローテーション：古いログがあればバックアップに回す
-	if _, err := os.Stat(logFileName); err == nil {
-		_ = os.Remove(oldLogFileName) // 古いバックアップを削除
-		_ = os.Rename(logFileName, oldLogFileName) // 現在のログをバックアップへ
-	}
-
-	// 2. 新規ログファイルの作成
-	f, err := os.OpenFile(logFileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	if err != nil {
-		return nil, err
-	}
-
-	// 3. 出力先を「コンソール」と「ファイル」の両方に設定
-	multi := io.MultiWriter(os.Stdout, f)
-	log.SetOutput(multi)
-
-	return f, nil
-}
 
 
 func main() {
+	installFlag := flag.Bool("install-browsers", false, "Install Playwright browsers")
+	flag.Parse()
+
+	if *installFlag {
+		// インストール処理だけ実行
+		os.Setenv("PLAYWRIGHT_BROWSER_TO_INSTALL", "chromium")
+
+		err := playwright.Install()
+		if err != nil {
+			log.Fatalf("Failed to install: %v", err)
+		}
+		return // ★ここで return してプログラムを終了させるのが超重要！
+	}
+
 	// ログの設定
-	f, err := setupLogFile()
-    if err != nil {
-        log.Fatalf("ログ設定に失敗: %v", err)
-    }
-    defer f.Close()
+	stopLogger := logger.SetupLogFile()
+	defer stopLogger()
 
 	// 最初に .env を読み込む
     if err := godotenv.Load(); err != nil {
         log.Println(".envファイルが見つかりません。デフォルト値を使用します。")
     }
+
+	// メイン処理：サーバー起動
+	e := echo.New()
 
 	database, err := db.NewDatabase()
 	if err != nil {
@@ -62,8 +54,6 @@ func main() {
 
 	repo := repository.NewBookRepository(database)
 
-	// メイン処理：サーバー起動
-	e := echo.New()
 
 	// CORSの設定も環境変数から取れるようにする
     frontendURL := os.Getenv("FRONTEND_URL")
@@ -107,10 +97,14 @@ func main() {
 	// CSVダウンロード用のエンドポイント
 	e.GET("/books/download", h.DownloadCSV)
 
+	// 静的ファイルの配信
+	e.Static("/", "dist")
+    e.File("/", "dist/index.html")
+
 	// サーバーの起動アドレスも環境変数にする
     addr := os.Getenv("SERVER_ADDR")
     if addr == "" {
-        addr = "127.0.0.1:8080"
+        addr = "0.0.0.0:8080"
     }
 	
 	log.Printf("サーバーを起動します: http://%s", addr)
